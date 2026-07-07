@@ -9,8 +9,8 @@ import matplotlib.pyplot as plt
 from PIL import Image
 from scipy.stats import sem
 
-import config
-from utils import (
+from src import config
+from src.helpers.utils import (
     generate_image,
     generate_text_output,
     get_spatial_relation_indices,
@@ -18,7 +18,7 @@ from utils import (
     process_inputs,
     validate_vision_grid_alignment,
 )
-from eval_logic import check_spatial_ans
+from src.eval_logic import check_spatial_ans
 
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 COMPUTE_DTYPE = torch.float32
@@ -354,6 +354,7 @@ def _verify_object_answer(question, model_answer, target_color, target_shape, sc
         f"- YES if the answer's final identified object is the target object ({target_color} {target_shape}).\n"
         f"- YES if it identifies the target by shape-only ({target_shape}) or color-only ({target_color}).\n"
         "- YES for relational phrasing if the final identified object is target.\n"
+        "- Treat 'plus' or 'plus sign' as equivalent to 'cross' when grading shapes.\n"
         "- NO if the final identified object is different.\n"
         "- NO if it mixes target color with wrong shape, or target shape with wrong color, as final answer.\n"
         "- NO if ambiguous or no answer.\n\n"
@@ -363,6 +364,7 @@ def _verify_object_answer(question, model_answer, target_color, target_shape, sc
         "Target: red star | Answer: 'The shape in front is a yellow heart.' -> NO\n"
         "Target: red star | Answer: 'star' -> YES\n"
         "Target: red star | Answer: 'red heart' -> NO\n\n"
+        "Target: green cross | Answer: 'The shape above is a green plus sign.' -> YES\n"
         "Return ONLY YES or NO."
     )
     judge_output = _generate_text_only_output(verifier_prompt, max_new_tokens=8)

@@ -4,8 +4,8 @@ import random
 import cv2
 import os
 from PIL import Image
-from config import *
-import config
+from src.config import *
+from src import config
 
 
 def get_conversation(prompt):

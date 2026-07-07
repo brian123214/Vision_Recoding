@@ -12,11 +12,12 @@ from transformers import (
     AutoProcessor,
 )
 
-import config
-from shape_generator import ShapeGenerator
+from src import config
+from src.helpers.shape_generator import ShapeGenerator
+from src.helpers.paths import repo_path
 
 # Import probing logic
-from probing import run_shared_prompt_extraction_pipeline, train_probes_on_folder
+from src.probing import run_shared_prompt_extraction_pipeline, train_probes_on_folder
 
 
 def parse_args():
@@ -49,12 +50,12 @@ def main():
             device_map={'': 'cuda'},
             output_hidden_states=True,
         )
-        base_folder = "../scratch/qwen_probing"
-        empty_base_folder = "../scratch/qwen_probing_empty"
-        caption_base_folder = "../scratch/qwen_probing_all_caption"
-        distractor_base_folder = "../scratch/qwen_probing_distractor_caption"
+        base_folder = str(repo_path("..", "scratch", "qwen_probing"))
+        empty_base_folder = str(repo_path("..", "scratch", "qwen_probing_empty"))
+        caption_base_folder = str(repo_path("..", "scratch", "qwen_probing_all_caption"))
+        distractor_base_folder = str(repo_path("..", "scratch", "qwen_probing_distractor_caption"))
 
-        save_figs_dir = "qwen_probing_plots"
+        save_figs_dir = repo_path("qwen_probing_plots")
         config.processor = AutoProcessor.from_pretrained(MODEL_ID)
         config.tokenizer = config.processor.tokenizer
 
@@ -68,12 +69,12 @@ def main():
         config.model = Gemma3ForConditionalGeneration.from_pretrained(
             MODEL_ID, device_map="auto", torch_dtype=torch.bfloat16, output_hidden_states=True
         ).eval()
-        base_folder = "../scratch/gemma_probing_12b"
-        empty_base_folder = "../scratch/gemma_probing_empty_12b"
-        caption_base_folder = "../scratch/gemma_probing_all_caption_12b"
-        distractor_base_folder = "../scratch/gemma_probing_distractor_caption_12b"
+        base_folder = str(repo_path("..", "scratch", "gemma_probing_12b"))
+        empty_base_folder = str(repo_path("..", "scratch", "gemma_probing_empty_12b"))
+        caption_base_folder = str(repo_path("..", "scratch", "gemma_probing_all_caption_12b"))
+        distractor_base_folder = str(repo_path("..", "scratch", "gemma_probing_distractor_caption_12b"))
 
-        save_figs_dir = "gemma12b_probing_plots"
+        save_figs_dir = repo_path("gemma12b_probing_plots")
         config.processor = AutoProcessor.from_pretrained(MODEL_ID)
         config.tokenizer = config.processor.tokenizer
     elif config.MODEL_TYPE == "internvl3":
@@ -91,11 +92,11 @@ def main():
         ).eval()
         config.tokenizer = config.processor.tokenizer
 
-        base_folder = "../scratch/internvl3_probing"
-        empty_base_folder = "../scratch/internvl3_probing_empty"
-        caption_base_folder = "../scratch/internvl3_probing_all_caption"
-        distractor_base_folder = "../scratch/internvl3_probing_distractor_caption"
-        save_figs_dir = "internvl3_probing_plots"
+        base_folder = str(repo_path("..", "scratch", "internvl3_probing"))
+        empty_base_folder = str(repo_path("..", "scratch", "internvl3_probing_empty"))
+        caption_base_folder = str(repo_path("..", "scratch", "internvl3_probing_all_caption"))
+        distractor_base_folder = str(repo_path("..", "scratch", "internvl3_probing_distractor_caption"))
+        save_figs_dir = repo_path("internvl3_probing_plots")
     else:
         raise ValueError("Invalid MODEL_TYPE specified.")
 

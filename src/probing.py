@@ -13,10 +13,10 @@ from torch.utils.data import DataLoader, TensorDataset
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 
-from config import *
-import config
-from utils import extract_hidden_states_simple, generate_image
-from eval_logic import get_color_shape_logic, get_spatial_logic
+from src.config import *
+from src import config
+from src.helpers.utils import extract_hidden_states_simple, generate_image
+from src.eval_logic import get_color_shape_logic, get_spatial_logic
 
 
 def _make_all_caption_prompt(shape_colors, shape_shapes):

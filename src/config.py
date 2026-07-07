@@ -18,7 +18,7 @@ from sklearn.metrics import accuracy_score
 from collections import defaultdict
 from typing import Dict, List, Tuple
 from transformers import Qwen2_5_VLForConditionalGeneration, Gemma3ForConditionalGeneration, AutoProcessor
-from shape_generator import ShapeGenerator
+from src.helpers.shape_generator import ShapeGenerator
 import torch
 import numpy as np
 import matplotlib.pyplot as plt

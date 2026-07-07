@@ -14,8 +14,8 @@ import random
 from collections import defaultdict
 from matplotlib.patches import Patch
 
-import config
-from utils import generate_text_output
+from src import config
+from src.helpers.utils import generate_text_output
 
 # ---------------------------------------------------------
 # UTILITY FUNCTIONS
@@ -709,3 +709,233 @@ def plot_side_by_side_natural_summaries(all_tasks_results, save_figs=False, save
         plt.savefig(os.path.join(save_folder, save_filename))
         print(f"Saved side-by-side plot to {os.path.join(save_folder, save_filename)}")
     plt.show()
+
+def plot_final_natural_reference_steering(all_tasks_results, save_figs=False, save_folder="plots", save_filename="final_natural_plot.png"):
+    val_frac = 0.30
+    use_strict = True
+
+    dataset_configs = [
+        {
+            "name": "Count",
+            "task_key": "counting",
+            "metrics": {
+                "1 \u2192 0": lambda r: float(r.get("nerf_success", 0)),
+                "1 \u2192 2": lambda r: float(r.get("add_success", 0)),
+            },
+            "coef_limits": {"1 \u2192 0": 20, "1 \u2192 2": 140},
+            "target_vector": "Count_Vecs",
+        },
+        {
+            "name": "Yes/No",
+            "task_key": "yes_no",
+            "metrics": {
+                "Yes to No": lambda r: float(r.get("nerf_success", 0)),
+                "No to Yes": lambda r: float(r.get("add_success", 0)),
+            },
+            "coef_limits": {"Yes to No": 20, "No to Yes": 140},
+            "target_vector": "Yes_No_Vecs",
+        },
+        {
+            "name": "Spatial",
+            "task_key": "spatial",
+            "metrics": {
+                "Switch Shape": lambda r: 0.5 * (
+                    float(r.get("left_correct", 0)) + float(r.get("right_correct", 0))
+                )
+            },
+            "coef_limits": {"Switch Shape": 20},
+            "target_vector": "Spatial_Vecs",
+        },
+    ]
+
+    vector_colors = {
+        "Count_Vecs": "#2E86AB",
+        "Yes_No_Vecs": "#A23B72",
+        "Spatial_Vecs": "#F18F01",
+        "Random": "#C73E1D",
+    }
+
+    def clean_vector_label(v):
+        return (
+            v.replace("_Vecs", "")
+             .replace("_", " ")
+             .replace("Yes No", "Yes/No")
+        )
+
+    def allowed(coeff, limit):
+        return coeff < limit if use_strict else coeff <= limit
+
+    def split_ids_by_image(rows):
+        all_ids = sorted({int(r["image_id"]) for r in rows})
+        rng = random.Random()
+        shuffled = list(all_ids)
+        rng.shuffle(shuffled)
+
+        n_val = max(1, int(round(len(shuffled) * val_frac)))
+        n_val = min(n_val, len(shuffled) - 1) if len(shuffled) > 1 else 1
+
+        val_ids = set(shuffled[:n_val])
+        test_ids = set(shuffled[n_val:])
+        return val_ids, test_ids
+
+    def aggregate_rows(rows, metrics):
+        agg = defaultdict(lambda: {"n": 0})
+
+        for r in rows:
+            key = (r["vector_name"], tuple(r["layers"]), r["coefficient"])
+            agg[key]["n"] += 1
+
+            for metric_name, metric_fn in metrics.items():
+                agg[key].setdefault(metric_name, 0.0)
+                agg[key][metric_name] += metric_fn(r)
+
+        out = {}
+        for key, vals in agg.items():
+            n = vals["n"]
+            if n == 0:
+                continue
+
+            out[key] = {"n": n}
+            for metric_name in metrics:
+                out[key][metric_name] = vals[metric_name] / n
+        return out
+
+    def choose_best_on_val(val_stats, metrics, coef_limits):
+        best = defaultdict(dict)
+
+        for (vec, layers, coeff), vals in val_stats.items():
+            for metric_name in metrics:
+                if not allowed(coeff, coef_limits[metric_name]):
+                    continue
+
+                acc = vals[metric_name]
+                cur = best[vec].get(metric_name)
+                if cur is None or acc > cur["acc"]:
+                    best[vec][metric_name] = {
+                        "acc": acc,
+                        "layers": layers,
+                        "coeff": coeff,
+                    }
+        return best
+
+    def evaluate_test_at_chosen(test_stats, chosen_best, metrics):
+        final = defaultdict(dict)
+
+        for vec in chosen_best:
+            for metric_name in metrics:
+                if metric_name not in chosen_best[vec]:
+                    continue
+
+                pick = chosen_best[vec][metric_name]
+                key = (vec, tuple(pick["layers"]), pick["coeff"])
+                test_acc = test_stats.get(key, {}).get(metric_name, np.nan)
+
+                final[vec][metric_name] = {
+                    "test_acc": test_acc,
+                    "val_acc": pick["acc"],
+                    "layers": pick["layers"],
+                    "coeff": pick["coeff"],
+                }
+        return final
+
+    all_results = {}
+    for ds in dataset_configs:
+        rows = all_tasks_results.get(ds["task_key"], [])
+        if not rows:
+            continue
+
+        val_ids, test_ids = split_ids_by_image(rows)
+        val_rows = [r for r in rows if int(r["image_id"]) in val_ids]
+        test_rows = [r for r in rows if int(r["image_id"]) in test_ids]
+
+        val_stats = aggregate_rows(val_rows, ds["metrics"])
+        test_stats = aggregate_rows(test_rows, ds["metrics"])
+        chosen = choose_best_on_val(val_stats, ds["metrics"], ds["coef_limits"])
+        final = evaluate_test_at_chosen(test_stats, chosen, ds["metrics"])
+
+        all_results[ds["name"]] = {
+            "metrics": list(ds["metrics"].keys()),
+            "target_vector": ds["target_vector"],
+            "final": final,
+            "n_total_images": len({int(r["image_id"]) for r in rows}),
+            "n_val_images": len(val_ids),
+            "n_test_images": len(test_ids),
+        }
+
+        print(
+            f"{ds['name']}: total={all_results[ds['name']]['n_total_images']} | "
+            f"val={all_results[ds['name']]['n_val_images']} | "
+            f"test={all_results[ds['name']]['n_test_images']}"
+        )
+
+    if not all_results:
+        print("No natural task results available for final plot.")
+        return {}
+
+    vector_order = ["Count_Vecs", "Yes_No_Vecs", "Spatial_Vecs", "Random"]
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5), sharey=True)
+    fig.suptitle("Reference Representation Steering", fontsize=16, fontweight="bold", y=1.04)
+
+    for idx, ds in enumerate(dataset_configs):
+        ax = axes[idx]
+        name = ds["name"]
+        if name not in all_results:
+            ax.axis("off")
+            continue
+
+        metrics = all_results[name]["metrics"]
+        final = all_results[name]["final"]
+        vectors = [v for v in vector_order if v in final]
+        x = np.arange(len(vectors))
+        width = 0.35 if len(metrics) > 1 else 0.6
+
+        for vec_idx, vec in enumerate(vectors):
+            for metric_idx, metric_name in enumerate(metrics):
+                if metric_name not in final[vec]:
+                    continue
+
+                result = final[vec][metric_name]
+                pos = x[vec_idx] + (metric_idx * width - (width / 2 if len(metrics) > 1 else 0))
+                hatch = "///" if metric_idx == 1 else None
+
+                ax.bar(
+                    pos,
+                    result["test_acc"],
+                    width=width,
+                    color=vector_colors[vec],
+                    edgecolor="black",
+                    hatch=hatch,
+                    linewidth=1.2,
+                )
+
+        ax.set_title(name, fontsize=13, fontweight="bold")
+        ax.set_xticks(x)
+        ax.set_xticklabels([clean_vector_label(v) for v in vectors], rotation=0, ha="center")
+        ax.set_ylim(0, 1.05)
+        ax.grid(axis="y", linestyle="--", alpha=0.3)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+        if idx == 0:
+            ax.set_ylabel("Intervention Success Rate")
+
+        legend_elements = [
+            Patch(
+                facecolor="white",
+                edgecolor="black",
+                hatch=("///" if metric_idx == 1 else None),
+                label=metric_name,
+            )
+            for metric_idx, metric_name in enumerate(metrics)
+        ]
+        ax.legend(handles=legend_elements, fontsize="small", loc="upper right")
+
+    plt.tight_layout()
+    if save_figs:
+        os.makedirs(save_folder, exist_ok=True)
+        save_path = os.path.join(save_folder, save_filename)
+        plt.savefig(save_path)
+        print(f"Saved final natural plot to {save_path}")
+    plt.show()
+    return all_results

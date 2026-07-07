@@ -4,10 +4,10 @@ import torch
 import matplotlib.pyplot as plt
 from scipy.stats import sem
 
-import config
-from shape_generator import ShapeGenerator
-from utils import process_inputs, generate_image, get_vision_start, get_spatial_relation_indices
-from eval_logic import get_color_shape_logic
+from src import config
+from src.helpers.shape_generator import ShapeGenerator
+from src.helpers.utils import process_inputs, generate_image, get_vision_start, get_spatial_relation_indices
+from src.eval_logic import get_color_shape_logic
 
 
 def set_layout_front_back():
@@ -358,6 +358,8 @@ def get_spatial_logic_object(shape_positions, shape_colors, shape_shapes, prompt
 
 
 SPATIAL_PROMPT_TEMPLATES = [
+    ("What object is {decision_text}?", "What object is {opposite_text}?"),
+    ("Which object lies {decision_text}?", "Which object lies {opposite_text}?"),
     ("What shape is {decision_text}?", "What shape is {opposite_text}?"),
     ("Which shape is {decision_text}?", "Which shape is {opposite_text}?"),
     ("Identify the shape that is {decision_text}.", "Identify the shape that is {opposite_text}."),
@@ -365,8 +367,6 @@ SPATIAL_PROMPT_TEMPLATES = [
     ("Can you find the shape {decision_text}?", "Can you find the shape {opposite_text}?"),
     ("Select the shape that is {decision_text}.", "Select the shape that is {opposite_text}."),
     ("The shape located {decision_text} is which?", "The shape located {opposite_text} is which?"),
-    ("What object is {decision_text}?", "What object is {opposite_text}?"),
-    ("Which object lies {decision_text}?", "Which object lies {opposite_text}?"),
     ("Describe the shape positioned {decision_text}.", "Describe the shape positioned {opposite_text}."),
 ]
 

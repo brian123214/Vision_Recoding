@@ -10,9 +10,9 @@ from matplotlib.collections import LineCollection
 import numpy as np
 import torch
 
-import config
-from concept import _run_forward, _vec_at_layer, extract_concept_vectors, get_vision_token_indices
-from run_concept import (
+from src import config
+from src.concept import _run_forward, _vec_at_layer, extract_concept_vectors, get_vision_token_indices
+from src.scripts.run_concept import (
     DEFAULT_SEED,
     SHAPE_COLOR_PROMPTS,
     _build_model_run_config,
@@ -20,7 +20,8 @@ from run_concept import (
     _initialize_shared_config,
     _save_json,
 )
-from utils import generate_image
+from src.helpers.paths import repo_path
+from src.helpers.utils import generate_image
 
 
 def _set_all_seeds(seed):
@@ -1098,7 +1099,12 @@ def main():
     _initialize_shared_config(model_run_config.model_id, model_run_config.patch_unit)
     _configure_scene(grid_size=4, x_factor=4, num_shapes=args.num_shapes, patch_unit=model_run_config.patch_unit)
 
-    base_save_folder = args.save_folder or f"{model_run_config.save_folder}_shape_color_scatterplots"
+    if args.save_folder is None:
+        base_save_folder = repo_path(f"{model_run_config.save_folder.name}_shape_color_scatterplots")
+    elif os.path.isabs(args.save_folder):
+        base_save_folder = args.save_folder
+    else:
+        base_save_folder = repo_path(args.save_folder)
     save_folder = os.path.join(base_save_folder, "normalized") if args.normalize_objects else base_save_folder
     plots_dir = os.path.join(save_folder, "plots")
     displacement_plots_dir = os.path.join(save_folder, "displacement_plots")

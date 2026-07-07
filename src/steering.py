@@ -1,8 +1,8 @@
 import torch
 import numpy as np
-from utils import *
-from config import *
-import config
+from src.helpers.utils import *
+from src.config import *
+from src import config
 
 
 class SimpleSteeredGenerator:

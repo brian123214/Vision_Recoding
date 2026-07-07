@@ -13,12 +13,13 @@ from transformers import (
     AutoModelForImageTextToText,
     AutoProcessor,
 )
-from shape_generator import ShapeGenerator
+from src.helpers.shape_generator import ShapeGenerator
+from src.helpers.paths import repo_path
 
 # Import modularized logic
-import config
-from eval_logic import eval_count_logic, eval_yes_no_logic, eval_spatial_logic, run_task_loop
-from steering import (
+from src import config
+from src.eval_logic import eval_count_logic, eval_yes_no_logic, eval_spatial_logic, run_task_loop
+from src.steering import (
     SimpleSteeredGenerator,
     run_steering_pipeline,
     aggregate_steering_vectors,
@@ -26,7 +27,7 @@ from steering import (
     create_random_aggregated_normalized,
     block_normalize
 )
-from plotting import (
+from src.helpers.plotting import (
     analyze_and_plot_sweep,
     save_global_archive,
     save_targeted_results_data,
@@ -44,22 +45,22 @@ RUN_MODE = "eval"
 TARGETED_LOOPS = 500
 TASK_COEFF_LIMITS = {
     "count": {
-        "-Ref": 4000,
-        "+Non-Ref": 4000,
+        "-Ref": 10000,
+        "+Non-Ref": 10000,
     },
     # "yes_no": {
     #     "-Ref": 2200,
     #     "+Non-Ref": 2200,
     # },
     "yes_no": {
-        "-Ref": 4000,
-        "+Non-Ref": 4000,
+        "-Ref": 10000,
+        "+Non-Ref": 10000,
     },
     "spatial": {
-        "Double-Flip": 4000,
+        "Double-Flip": 10000,
     },
 }
-RANDOM_VECTOR_THRESHOLD = 0.20
+RANDOM_VECTOR_THRESHOLD = 0.25
 TASK_SWEEP_COEFFS = {
     "count": list(range(10, 500, 10)),
     "yes_no": list(range(10, 100, 20)),
@@ -73,6 +74,11 @@ def parse_args():
         choices=["qwen", "gemma", "internvl3"],
         default="qwen",
         help="Which model configuration to run.",
+    )
+    parser.add_argument(
+        "--targeted-plot-name",
+        default="_targeted_test_summary_v4.png",
+        help="Filename for the final targeted summary plot inside the save folder.",
     )
     return parser.parse_args()
 
@@ -95,7 +101,7 @@ def main():
             device_map={'': 'cuda'},
             output_hidden_states=True,
         )
-        folder = 'steering_vectors' 
+        folder = repo_path("steering_vectors")
         file = 'qwen_7b_aggregated_steering_vectors_num_shape_3_updated_prompts_4x4_combined_not_and_missing.npz'
         # file = 'qwen_7b_aggregated_steering_vectors_1500_num_shape_3_updated_prompts_4x4_combined_not_and_missing.npz'
         aggregated_vectors = np.load(os.path.join(folder, file), allow_pickle=True)
@@ -104,7 +110,7 @@ def main():
         color_shape_count_aggregated = aggregated_vectors['color_shape_count']
         spatial_aggregated = aggregated_vectors['spatial']
 
-        SAVE_PLOTS_FOLDER = "qwen_steering_plots_15_combined_not_and_missing"
+        SAVE_PLOTS_FOLDER = repo_path("qwen_steering_plots_15_combined_not_and_missing")
     
     elif config.MODEL_TYPE == "gemma":
         print("Doing Gemma Steering")
@@ -150,7 +156,7 @@ def main():
         # SAVE_PLOTS_FOLDER = "gemma12b_singular_spatial"
         # SAVE_PLOTS_FOLDER = "gemma12b_20_all"
 
-        SAVE_PLOTS_FOLDER = "gemma12b_20_all"
+        SAVE_PLOTS_FOLDER = repo_path("gemma12b_20_all")
 
         # SAVE_PLOTS_FOLDER = "gemma4b_15_uhhhh"
     elif config.MODEL_TYPE == "internvl3":
@@ -171,7 +177,7 @@ def main():
         config.generator = ShapeGenerator(patch_size=config.PATCH_SIZE)
 
         # SAVE_PLOTS_FOLDER = "internvl3_steering_plots_block_normalize"
-        SAVE_PLOTS_FOLDER = "internvl3_steering_plots_without_not"
+        SAVE_PLOTS_FOLDER = repo_path("internvl3_steering_plots_without_not")
         # SAVE_PLOTS_FOLDER = "internvl3_steering_plots_only_with_not"
     else:
         raise ValueError(f"Unsupported MODEL_TYPE: {config.MODEL_TYPE}")
@@ -197,9 +203,9 @@ def main():
     USE_BASELINE_MATCH_VECTORS = True
 
     default_vector_paths = {
-        "qwen": "steering_vectors/qwen_7b_aggregated_steering_vectors_num_shape_3_updated_prompts_4x4_combined_not_and_missing.npz",
-        "gemma": "steering_vectors/gemma_12b_aggregated_steering_vectors_num_shape_3_updated_prompts_4x4_combined_all.npz",
-        "internvl3": "steering_vectors/internvl3_aggregated_without_not.npz",
+        "qwen": repo_path("steering_vectors", "qwen_7b_aggregated_steering_vectors_num_shape_3_updated_prompts_4x4_combined_not_and_missing.npz"),
+        "gemma": repo_path("steering_vectors", "gemma_12b_aggregated_steering_vectors_num_shape_3_updated_prompts_4x4_combined_all.npz"),
+        "internvl3": repo_path("steering_vectors", "internvl3_aggregated_without_not.npz"),
     }
     vector_path = default_vector_paths.get(config.MODEL_TYPE)
     if vector_path is None:
@@ -316,8 +322,8 @@ def main():
     vectors_map = {
         "Count_Vecs": color_shape_count_aggregated_normalized,
         "Yes_No_Vecs": color_shape_yes_no_aggregated_normalized,
-        # "Spatial_Vecs": spatial_aggregated_normalized,  
-        "Spatial_Vecs": spatial_block_normalized,
+        "Spatial_Vecs": spatial_aggregated_normalized,  
+        # "Spatial_Vecs": spatial_block_normalized,
         "Random": shape_count_random_normalized,
 
         # "Block_Count": count_block_normalized,
@@ -341,7 +347,7 @@ def main():
                 full_results = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: {'correct': 0, 'total': 0}))))
 
                 for v_name, v_data in vectors_map.items():
-                    random.seed(0)
+                    # random.seed(0)
                     run_task_loop(
                         task_name=t_name, 
                         logic_func=t_logic, 
@@ -387,7 +393,7 @@ def main():
         eval_vectors_map = {
             "Count_Vecs": color_shape_count_aggregated_normalized,
             "Yes_No_Vecs": color_shape_yes_no_aggregated_normalized,
-            "Spatial_Vecs": spatial_block_normalized, # spatial_aggregated_normalized,
+            "Spatial_Vecs": spatial_aggregated_normalized,
             "Random": shape_count_random_normalized,
         }
 
@@ -398,7 +404,7 @@ def main():
                     print(f"Skipping {t_name} / {v_name} - no best configs found.")
                     continue
 
-                random.seed(1)
+                # random.seed(1)
                 run_task_loop(
                     task_name=t_name,
                     logic_func=t_logic,
@@ -418,7 +424,10 @@ def main():
             SAVE_PLOTS_FOLDER,
         )
         os.makedirs(SAVE_PLOTS_FOLDER, exist_ok=True)
-        targeted_plot_path = os.path.join(SAVE_PLOTS_FOLDER, "_targeted_test_summary_v3.png")
+        targeted_plot_name = os.path.basename(args.targeted_plot_name)
+        if not targeted_plot_name.endswith(".png"):
+            targeted_plot_name = f"{targeted_plot_name}.png"
+        targeted_plot_path = os.path.join(SAVE_PLOTS_FOLDER, targeted_plot_name)
         plt.gcf().savefig(targeted_plot_path, bbox_inches="tight")
         print(f"Saved targeted summary plot to: {targeted_plot_path}")
 

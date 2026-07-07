@@ -1,9 +1,9 @@
 import torch
 import random
-from utils import *
-from steering import *
-from config import *
-import config
+from src.helpers.utils import *
+from src.steering import *
+from src.config import *
+from src import config
 
 
 def get_color_shape_logic(shape_positions, shape_colors, shape_shapes):

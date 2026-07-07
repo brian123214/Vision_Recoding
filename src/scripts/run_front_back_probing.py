@@ -22,9 +22,10 @@ from transformers import (
     AutoProcessor,
 )
 
-import config
-from shape_generator import FrontBackShapeGenerator
-from utils import process_inputs, get_vision_start, generate_text_output
+from src import config
+from src.helpers.shape_generator import FrontBackShapeGenerator
+from src.helpers.paths import repo_path
+from src.helpers.utils import process_inputs, get_vision_start, generate_text_output
 
 
 # PROMPT_PAIRS = [
@@ -582,7 +583,8 @@ def main():
     args = parse_args()
 
     setup_model(args.model)
-    args.output_dir = os.path.join(args.output_dir, args.model)
+    output_base = args.output_dir if os.path.isabs(args.output_dir) else repo_path(args.output_dir)
+    args.output_dir = os.path.join(output_base, args.model)
 
     # generator = FrontBackShapeGenerator(
     #     image_size=args.image_size,

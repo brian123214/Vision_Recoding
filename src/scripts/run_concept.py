@@ -4,6 +4,7 @@ import os
 import random
 import re
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -14,8 +15,8 @@ from transformers import (
     Qwen2_5_VLForConditionalGeneration,
 )
 
-import config
-from concept import (
+from src import config
+from src.concept import (
     extract_concept_vectors,
     plot_front_back_concept,
     plot_front_back_concept_split,
@@ -27,31 +28,32 @@ from concept import (
     run_shape_color_concept_priming_absent_distractors,
     run_spatial_concept_priming_experiment,
 )
-from shape_generator import ShapeGenerator
-from utils import validate_vision_grid_alignment
+from src.helpers.shape_generator import ShapeGenerator
+from src.helpers.paths import repo_path
+from src.helpers.utils import validate_vision_grid_alignment
 
 
 FRONT_BACK_PROMPTS = [
     ("Describe only the shape that is in front of another shape.", "Describe only the shape that is behind another shape."),
-    # ("Describe only the shape that is on top of the other shape it overlaps.", "Describe only the shape that is underneath the other shape it overlaps."),
-    # ("Describe only the shape that is covering another shape.", "Describe only the shape that is being covered by another shape."),
-    # ("Describe only the shape that appears closer to the viewer than the one it overlaps.", "Describe only the shape that appears farther from the viewer than the one it overlaps."),
-    # ("Describe only the shape that is fully visible in front of another.", "Describe only the shape that is partially hidden behind another."),
-    # ("Describe only the shape that is visually on top in the overlapping area.", "Describe only the shape that is visually on the bottom in the overlapping area."),
-    # ("Describe only the shape that obscures another shape.", "Describe only the shape that is obscured by another shape."),
-    # ("Describe only the shape that overlaps the other.", "Describe only the shape that is overlapped by the other."),
-    # ("Describe only the shape that is positioned in the foreground.", "Describe only the shape that is positioned in the background."),
-    # ("Describe only the shape that sits above another in the stack.", "Describe only the shape that sits below another in the stack."),
-    # ("Describe only the object that is in front of another object.", "Describe only the object that is behind another object."),
-    # ("Describe only the object that is on top of the other object it overlaps.", "Describe only the object that is underneath the other object it overlaps."),
-    # ("Describe only the object that is covering another object.", "Describe only the object that is being covered by another object."),
-    # ("Describe only the object that appears closer to the viewer than the one it overlaps.", "Describe only the object that appears farther from the viewer than the one it overlaps."),
-    # ("Describe only the object that is fully visible in front of another.", "Describe only the object that is partially hidden behind another."),
-    # ("Describe only the object that is visually on top in the overlapping area.", "Describe only the object that is visually on the bottom in the overlapping area."),
-    # ("Describe only the object that obscures another object.", "Describe only the object that is obscured by another object."),
-    # ("Describe only the object that overlaps the other.", "Describe only the object that is overlapped by the other."),
-    # ("Describe only the object that is positioned in the foreground.", "Describe only the object that is positioned in the background."),
-    # ("Describe only the object that sits above another in the stack.", "Describe only the object that sits below another in the stack."),
+    ("Describe only the shape that is on top of the other shape it overlaps.", "Describe only the shape that is underneath the other shape it overlaps."),
+    ("Describe only the shape that is covering another shape.", "Describe only the shape that is being covered by another shape."),
+    ("Describe only the shape that appears closer to the viewer than the one it overlaps.", "Describe only the shape that appears farther from the viewer than the one it overlaps."),
+    ("Describe only the shape that is fully visible in front of another.", "Describe only the shape that is partially hidden behind another."),
+    ("Describe only the shape that is visually on top in the overlapping area.", "Describe only the shape that is visually on the bottom in the overlapping area."),
+    ("Describe only the shape that obscures another shape.", "Describe only the shape that is obscured by another shape."),
+    ("Describe only the shape that overlaps the other.", "Describe only the shape that is overlapped by the other."),
+    ("Describe only the shape that is positioned in the foreground.", "Describe only the shape that is positioned in the background."),
+    ("Describe only the shape that sits above another in the stack.", "Describe only the shape that sits below another in the stack."),
+    ("Describe only the object that is in front of another object.", "Describe only the object that is behind another object."),
+    ("Describe only the object that is on top of the other object it overlaps.", "Describe only the object that is underneath the other object it overlaps."),
+    ("Describe only the object that is covering another object.", "Describe only the object that is being covered by another object."),
+    ("Describe only the object that appears closer to the viewer than the one it overlaps.", "Describe only the object that appears farther from the viewer than the one it overlaps."),
+    ("Describe only the object that is fully visible in front of another.", "Describe only the object that is partially hidden behind another."),
+    ("Describe only the object that is visually on top in the overlapping area.", "Describe only the object that is visually on the bottom in the overlapping area."),
+    ("Describe only the object that obscures another object.", "Describe only the object that is obscured by another object."),
+    ("Describe only the object that overlaps the other.", "Describe only the object that is overlapped by the other."),
+    ("Describe only the object that is positioned in the foreground.", "Describe only the object that is positioned in the background."),
+    ("Describe only the object that sits above another in the stack.", "Describe only the object that sits below another in the stack."),
 ]
 
 SPATIAL_PROMPT_TEMPLATES = [
@@ -62,6 +64,7 @@ SPATIAL_PROMPT_TEMPLATES = [
     ("Can you find the shape {decision_text}?", "Can you find the shape {opposite_text}?"),
     ("Select the shape that is {decision_text}.", "Select the shape that is {opposite_text}."),
     ("The shape located {decision_text} is which?", "The shape located {opposite_text} is which?"),
+    ("What objects are {decision_text}?", "What objects are {opposite_text}?"),
     ("What object is {decision_text}?", "What object is {opposite_text}?"),
     ("Which object lies {decision_text}?", "Which object lies {opposite_text}?"),
     ("Describe the shape positioned {decision_text}.", "Describe the shape positioned {opposite_text}."),
@@ -109,6 +112,8 @@ class SceneState:
 
 
 def _to_jsonable(obj):
+    if isinstance(obj, Path):
+        return str(obj)
     if isinstance(obj, np.ndarray):
         return obj.tolist()
     if isinstance(obj, (np.float16, np.float32, np.float64)):
@@ -193,8 +198,8 @@ def _build_model_run_config(args):
         ).eval()
         return ModelRunConfig(
             model_id=model_id,
-            concept_file="qwen_concept_vectors.npy",
-            save_folder="qwen_referred_concept_priming_plots_v5",
+            concept_file=repo_path("qwen_concept_vectors.npy"),
+            save_folder=repo_path("qwen_referred_concept_priming_plots_v8"),
             patch_unit=28,
         )
 
@@ -211,8 +216,8 @@ def _build_model_run_config(args):
         ).eval()
         return ModelRunConfig(
             model_id=model_id,
-            concept_file=f"gemma{args.gemma_size}_concept_vectors.npy",
-            save_folder=f"gemma{args.gemma_size}_referred_concept_priming_plots",
+            concept_file=repo_path(f"gemma{args.gemma_size}_concept_vectors.npy"),
+            save_folder=repo_path(f"gemma{args.gemma_size}_referred_concept_priming_plots"),
             patch_unit=56,
         )
 
@@ -230,8 +235,8 @@ def _build_model_run_config(args):
         ).eval()
         return ModelRunConfig(
             model_id=model_id,
-            concept_file="internvl3_concept_vectors.npy",
-            save_folder="internvl3_referred_concept_priming_plots_v5",
+            concept_file=repo_path("internvl3_concept_vectors.npy"),
+            save_folder=repo_path("internvl3_referred_concept_priming_plots_v8"),
             patch_unit=28,
         )
 
@@ -323,7 +328,7 @@ def _run_front_back_suite(
             )
             pair_summary = plot_front_back_concept(
                 pair_results["all_data"],
-                title=f"Front/Back Concept Priming: Pair {pair_index}",
+                title="Front/Back Concept Priming",
                 save_path=plot_path,
             )
             split_plot_path = None
@@ -333,7 +338,7 @@ def _run_front_back_suite(
                 split_summary = plot_front_back_concept_split(
                     pair_results["correct_data"],
                     pair_results["incorrect_data"],
-                    title=f"Front/Back Concept Priming Verified Split: Pair {pair_index}",
+                    title="Front/Back Concept Priming Verified Split",
                     save_path=split_plot_path,
                 )
 
@@ -405,7 +410,7 @@ def _run_spatial_suite(
         )
         pair_summary = plot_spatial_priming_results(
             pair_results["all_results"],
-            title=f"Spatial Concept Priming: Pair {pair_index}",
+            title="Spatial Concept Priming",
             save_path=plot_path,
         )
         split_plot_path = None
@@ -415,7 +420,7 @@ def _run_spatial_suite(
             split_summary = plot_spatial_priming_split_results(
                 pair_results["correct_results"],
                 pair_results["incorrect_results"],
-                title=f"Spatial Concept Priming Verified Split: Pair {pair_index}",
+                title="Spatial Concept Priming Verified Split",
                 save_path=split_plot_path,
             )
 
@@ -489,7 +494,7 @@ def _run_shape_color_suite(
         )
         summary = plot_shape_color_concept_priming(
             pair_results["all_vals"],
-            title=f"Concept Priming (Absent Distractors): Pair {pair_index}",
+            title="Concept Priming (Absent Distractors)",
             save_path=plot_path,
         )
 
@@ -500,7 +505,7 @@ def _run_shape_color_suite(
             split_summary = plot_shape_color_concept_priming_split(
                 pair_results["correct_vals"],
                 pair_results["incorrect_vals"],
-                title=f"Concept Priming Verified Split: Pair {pair_index}",
+                title="Concept Priming Verified Split",
                 save_path=split_plot_path,
             )
 

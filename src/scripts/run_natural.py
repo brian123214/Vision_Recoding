@@ -11,15 +11,17 @@ from transformers import (
     AutoProcessor,
 )
 
-import config
-from shape_generator import ShapeGenerator
-from steering import block_average_and_repeat, create_random_aggregated_normalized
-from natural import (
+from src import config
+from src.helpers.shape_generator import ShapeGenerator
+from src.helpers.paths import repo_path
+from src.steering import block_average_and_repeat, create_random_aggregated_normalized
+from src.natural import (
     NaturalSteeredGenerator,
     run_spatial_intervention,
     run_counting_intervention,
     run_yes_no_intervention,
-    run_evaluation_pipeline
+    run_evaluation_pipeline,
+    plot_final_natural_reference_steering
 )
 
 def main():
@@ -56,8 +58,8 @@ def main():
         HIDDEN_DIM = config.model.config.hidden_size
         NUM_LAYERS = config.model.config.num_hidden_layers
 
-        vector_path = f"steering_vectors/{config.MODEL_TYPE}_aggregated.npz"
-        SAVE_PLOTS_FOLDER = f"{config.MODEL_TYPE}_natural_plots"
+        vector_path = repo_path("steering_vectors", f"{config.MODEL_TYPE}_aggregated.npz")
+        SAVE_PLOTS_FOLDER = repo_path(f"{config.MODEL_TYPE}_natural_plots")
 
     elif config.MODEL_TYPE == "gemma":
         config.IMAGE_START_TOKEN = "<start_of_image>"
@@ -78,12 +80,12 @@ def main():
         # vector_path = "steering_vectors/gemma_4b_aggregated_uhhh_1500.npz"
         # vector_path = f"steering_vectors/{config.MODEL_TYPE}_aggregated.npz"
         
-        vector_path = 'steering_vectors/gemma_12b_aggregated_steering_vectors_num_shape_3_updated_prompts_4x4_combined_all.npz'
+        vector_path = repo_path("steering_vectors", "gemma_12b_aggregated_steering_vectors_num_shape_3_updated_prompts_4x4_combined_all.npz")
         # vector_path = 'steering_vectors/gemma_4b_aggregated_steering_vectors_num_shape_3_updated_prompts_4x4_spatial_one_prompt.npz'
         # vector_path = 'steering_vectors/gemma_12b_aggregated_uhhh_1500.npz'
         # SAVE_PLOTS_FOLDER = "gemma4b_natural_plotsv3_uhhh"
         # SAVE_PLOTS_FOLDER = "gemma12b_natural_plots"
-        SAVE_PLOTS_FOLDER = "gemma12b_natural_plots_uhhh"
+        SAVE_PLOTS_FOLDER = repo_path("gemma12b_natural_plots_uhhh")
     elif config.MODEL_TYPE == "internvl3":
         config.IMAGE_START_TOKEN = "<img>"
         config.IMAGE_END_TOKEN = "</img>"
@@ -100,9 +102,9 @@ def main():
         config.generator = ShapeGenerator(patch_size=config.PATCH_SIZE)
         HIDDEN_DIM = config.model.config.text_config.hidden_size
         NUM_LAYERS = config.model.config.text_config.num_hidden_layers
-        vector_path = f"steering_vectors/{config.MODEL_TYPE}_aggregated.npz"
+        vector_path = repo_path("steering_vectors", f"{config.MODEL_TYPE}_aggregated.npz")
         # SAVE_PLOTS_FOLDER = f"{config.MODEL_TYPE}_natural_plots"
-        SAVE_PLOTS_FOLDER = f"internvl3_15_every_10_natural_plots"
+        SAVE_PLOTS_FOLDER = repo_path("internvl3_15_every_10_natural_plots")
     else:
         raise ValueError(f"Unsupported MODEL_TYPE: {config.MODEL_TYPE}")
 
@@ -134,11 +136,11 @@ def main():
 
     # 3. LOAD COCO & TARGETS
     print("Loading COCO annotations...")
-    annFile = 'instances_train2017.json'
+    annFile = repo_path("instances_train2017.json")
     coco = COCO(annFile)
     
     # json_file_path = "kept_triplets.json"
-    json_file_path = "saved_triplets.json" 
+    json_file_path = repo_path("saved_triplets.json")
     with open(json_file_path, 'r') as f:
         candidates = json.load(f)
     all_target_id = [x['id'] for x in candidates]
@@ -253,6 +255,18 @@ def main():
     )
     with open(os.path.join(SAVE_PLOTS_FOLDER, 'spatial_natural_results.json'), 'w') as f:
         json.dump(final_results_spatial, f)
+
+    print("\n--- Plotting Final Natural Reference Steering Summary ---")
+    plot_final_natural_reference_steering(
+        {
+            "counting": final_results_counting,
+            "yes_no": final_results_yes_no,
+            "spatial": final_results_spatial,
+        },
+        save_figs=SAVE_FIGS,
+        save_folder=SAVE_PLOTS_FOLDER,
+        save_filename="final_natural_plot.png",
+    )
     
     
 
